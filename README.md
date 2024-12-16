@@ -173,7 +173,7 @@ for(SObject record : records) {
 
 ## Framework Modules
 
-<details>
+<details style="padding-left:20px;">
     <summary><b>Base Module</b></summary>
 
 ### Base Module
@@ -234,7 +234,7 @@ Key Components:
 
     </details>
 
-<details>
+<details style="padding-left:20px;">
     <summary><b>Trigger Module</b></summary>
 
 ### Trigger Module
@@ -379,7 +379,7 @@ new MyTriggerHandler(
 
 </details>
 
-<details>
+<details style="padding-left:20px;">
     <summary><b>Iterator Module</b></summary>
 
 ### Iterator Module and Functional Programming
@@ -571,7 +571,7 @@ AFFIter.Iterator it = new AFFIter.ListIterator(objects);
 ```
 </details>
 
-<details>
+<details style="padding-left:20px;">
     <summary><b>Feature Control Module</b></summary>
 
 ### Feature Control Module
@@ -697,7 +697,7 @@ public class BulkFeatureChecker {
 
 </details>
 
-<details>
+<details style="padding-left:20px;">
     <summary><b>Security Module</b></summary>
 
 ### Security Module
@@ -902,7 +902,7 @@ By caching field descriptions and permission results, it minimizes the overhead 
 
 </details>
 
-<details>
+<details style="padding-left:20px;">
     <summary><b>DML Module</b></summary>
 
 ### DML Module
@@ -1023,7 +1023,7 @@ Use SYSTEM_MODE only when bypassing user permissions is necessary
 
 </details>
 
-<details>
+<details style="padding-left:20px;">
     <summary><b>Factory Module</b></summary>
 
 ### Factory Module
@@ -1121,7 +1121,7 @@ Account acc = (Account)factory.create();
 
 </details>
 
-<details>
+<details style="padding-left:20px; padding-bottom:20px;">
     <summary><b>Commons Module</b></summary>
 
 ### Commons Module
