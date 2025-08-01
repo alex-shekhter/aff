@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Engine_Type__c</fullName>
+    <description>The engine used to run this job</description>
+    <label>Engine Type</label>
+    <required>false</required>
+    <trackTrending>false</trackTrending>
+    <type>Picklist</type>
+    <valueSet>
+        <restricted>true</restricted>
+        <valueSetDefinition>
+            <sorted>false</sorted>
+            <value>
+                <fullName>NotDefined</fullName>
+                <default>false</default>
+                <label>NotDefined</label>
+            </value>
+            <value>
+                <fullName>Queueable</fullName>
+                <default>false</default>
+                <label>Queueable</label>
+            </value>
+            <value>
+                <fullName>Batch</fullName>
+                <default>false</default>
+                <label>Batch</label>
+            </value>
+            <value>
+                <fullName>PlatformEvent</fullName>
+                <default>false</default>
+                <label>PlatformEvent</label>
+            </value>
+            <value>
+                <fullName>Future</fullName>
+                <default>false</default>
+                <label>Future</label>
+            </value>
+        </valueSetDefinition>
+    </valueSet>
+</CustomField>

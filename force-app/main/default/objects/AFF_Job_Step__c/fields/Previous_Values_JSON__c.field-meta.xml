@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Previous_Values_JSON__c</fullName>
+    <description>this field will store the JSON representation of the state before the action was executed. This is the &quot;undo&quot; log used by the compensator.</description>
+    <label>Previous Values JSON</label>
+    <length>32768</length>
+    <trackTrending>false</trackTrending>
+    <type>LongTextArea</type>
+    <visibleLines>3</visibleLines>
+</CustomField>

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Current_Step_Index__c</fullName>
+    <description>The index of the AFF_Sub_Action__c record currently being processed.</description>
+    <externalId>false</externalId>
+    <inlineHelpText>The index of the AFF_Sub_Action__c record currently being processed.</inlineHelpText>
+    <label>Current Step Index</label>
+    <precision>18</precision>
+    <required>false</required>
+    <scale>0</scale>
+    <trackTrending>false</trackTrending>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>

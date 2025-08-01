@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Step_Progress_State__c</fullName>
+    <description>This field serves as a persistent bookmark for the subsequent invocation of the Step (Sub Action). It stores necessary data to facilitate processing new portions of work.
+
+For instance, if we need to process 1000 records in batches of 100 per transaction, this field can track the number of records already processed. After the first transaction, it will store 100, then 200 after the second, and so on.</description>
+    <label>Step Progress State</label>
+    <length>131072</length>
+    <trackTrending>false</trackTrending>
+    <type>LongTextArea</type>
+    <visibleLines>3</visibleLines>
+</CustomField>

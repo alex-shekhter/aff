@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="https://soap.sforce.com/2006/04/metadata">
+    <fullName>Finalizer_Executed__c</fullName>
+    <defaultValue>false</defaultValue>
+    <description>True if Finalizer has been executed already, False otherwise</description>
+    <externalId>false</externalId>
+    <label>Finalizer Executed</label>
+    <type>Checkbox</type>
+</CustomField>

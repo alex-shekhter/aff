@@ -13,6 +13,8 @@
 
 AFF is a modular framework for Salesforce Apex development that provides foundational building blocks to streamline development of enterprise applications. The framework is designed with loose coupling in mind, allowing developers to use only the components they need without bringing in unnecessary dependencies. Each module can be used independently or in combination with others, allowing developers to choose only the components they need.
 
+<hr/>
+
 <details>
     <summary><b>Core Architecture</b></summary>
 
@@ -167,7 +169,7 @@ for(SObject record : records) {
    - Operations need to share context
 
 </details>
-
+<hr/>
 <details>
     <summary><b>Framework Modules</b></summary>
 
@@ -658,11 +660,11 @@ AFFFeatureCtrl.FeatureConfigMgr featureManager = (
 1. Caching Feature States
 ```apex
 public class CachedFeatureManager {
-    private static Map featureStateCache;
+    private static Map<String, Boolean> featureStateCache;
     
     public static Boolean isEnabled(AFFBase.Category feature) {
         if (featureStateCache == null) {
-            featureStateCache = new Map();
+            featureStateCache = new Map<String, Boolean>();
         }
         
         String featureName = feature.name();
@@ -681,8 +683,8 @@ public class CachedFeatureManager {
 2. Bulk Processing
 ```apex
 public class BulkFeatureChecker {
-    public Map checkFeatures(Set featureNames) {
-        Map results = new Map();
+    public Map<String, Boolean> checkFeatures(Set<String> featureNames) {
+        Map<String, Boolean> results = new Map<String, Boolean>();
         // Bulk query feature configurations
         for(AFF_Features_Control_Config__mdt config : 
             [SELECT DeveloperName, IsEnabled__c 
@@ -783,7 +785,7 @@ public class SecurityService {
         SObjectType objType, 
         List<String> fields
     ) {
-        String key = objType + String.join(fields, ',');
+        String key = String.valueOf(objType) + String.join(fields, ',');
         if (!checkersByObject.containsKey(key)) {
             checkersByObject.put(
                 key, 
@@ -838,7 +840,7 @@ public class SecureOperation {
         if (!checker.isAccessible()) {
             throw new SecurityException(
                 'Insufficient access to fields: ' + 
-                String.join(fields, ',')
+                String.join(checker.getFields(), ',')
             );
         }
     }
@@ -859,8 +861,8 @@ checker.isAccessible();
 checker.isUpdateable();
 
 // NOT THIS - multiple checkers
-new AFFSecurity.FieldChecker(Account.SObjectType, fields).isAccessible();
-new AFFSecurity.FieldChecker(Account.SObjectType, fields).isUpdateable();
+new AFFSecurity.FieldChecker(Account.SObjectType, new List<String>{'Name', 'Industry'}).isAccessible();
+new AFFSecurity.FieldChecker(Account.SObjectType, new List<String>{'Name', 'Industry'}).isUpdateable();
 ```
 
 2. Use Appropriate Cache Scope
@@ -872,7 +874,7 @@ public class SecurityCache {
         
     // Cache key generator
     private static String generateKey(SObjectType objType, List<String> fields) {
-        return objType + String.valueOf(fields.hashCode());
+        return String.valueOf(objType) + String.valueOf(fields.hashCode());
     }
 }
 ```
@@ -1156,8 +1158,140 @@ Try to avoid `deepClone` for the Collections and Complex Objects which do not im
 
 </details>
 
+<details style="padding-left:20px;">
+    <summary><b>Error Module</b></summary>
+
+### Error Module
+**Required Classes**: `AFFError`
+
+The Error Module provides a standardized, serializable format for exception handling. This is crucial for logging detailed error information and for passing exception details across asynchronous boundaries, such as in the AFFAsync module.
+
+```mermaid
+---
+title: Error Module Class Diagram
+---
+classDiagram
+        class SerializableError {
+            +String message
+            +String stackTrace
+            +String type
+            +List~DmlError~ dmlErrors
+            +SerializableError cause
+            +String serialize()
+        }
+        class DmlError {
+            +Integer recordIndex
+            +String statusCode
+            +String statusMessage
+            +List~String~ fields
+        }
+        class AFFError {
+          <<abstract>>
+          +marshal(Exception) SerializableError$
+          +parse(String) SerializableError$
+        }
+
+    SerializableError o-- DmlError : contains
+    SerializableError o-- SerializableError : "cause"
+```
+
+#### Example Usage
+
+```apex
+try {
+    // Some operation that might fail
+    Database.insert(new Account()); // Intentionally missing required fields
+} catch (Exception e) {
+    // Marshal the live exception into a serializable format
+    AFFError.SerializableError serializableError = AFFError.marshal(e);
+
+    // Convert to a JSON string for logging or storage
+    String errorJson = serializableError.serialize();
+    System.debug(errorJson);
+
+    // This JSON can be stored and later deserialized for analysis
+    AFFError.SerializableError parsedError = AFFError.parse(errorJson);
+    System.debug('Parsed Error Message: ' + parsedError.message);
+}
+```
+
 </details>
 
+<details style="padding-left:20px;">
+    <summary><b>Limit Module</b></summary>
+
+### Limit Module
+**Required Classes**: `AFFLimit`
+
+The Limit Module offers a proactive way to manage Salesforce governor limits within a transaction. The `Budget` class allows a process to check if it's approaching limits before executing another operation, enabling graceful pausing and resuming of work. This is a key component for building scalable batch processes.
+
+```mermaid
+---
+title: Limit Module Class Diagram
+---
+classDiagram
+    namespace AFFLimit {
+        class Budget {
+            -Integer soqlBudget
+            -Integer dmlStatementsBudget
+            -Integer cpuTimeBudget
+            -Integer heapSizeBudget
+            +Budget(Integer safetyFactor)
+            +Boolean canContinue()
+        }
+    }
+```
+
+#### Example Usage
+
+```apex
+// Create a budget that allows consumption of up to 80% of any limit
+AFFLimit.Budget budget = new AFFLimit.Budget(80);
+
+List<Account> accountsToProcess = [SELECT Id FROM Account LIMIT 10000];
+List<Account> batchToUpdate = new List<Account>();
+
+for (Account acc : accountsToProcess) {
+    // Before processing the next record, check if we have budget
+    if (!budget.canContinue()) {
+        System.debug(LoggingLevel.WARN, 'Limit budget exhausted. Processing remaining records in a new transaction.');
+        // Here you would typically re-enqueue the remaining work
+        break; 
+    }
+
+    batchToUpdate.add(acc);
+
+    // Perform DML in batches to conserve DML statements
+    if (batchToUpdate.size() == 200) {
+        Database.update(batchToUpdate, false);
+        batchToUpdate.clear();
+    }
+}
+
+// Process any remaining records
+if (!batchToUpdate.isEmpty()) {
+    Database.update(batchToUpdate, false);
+}
+```
+
+</details>
+
+<details style="padding-left:20px; padding-bottom:20px;">
+    <summary><b>Async Module</b></summary>
+
+### Async Module
+**Required Classes**: `AFFAsync`, `AFFLimit`, `AFFError`, `AFFBase`
+
+The Async Module provides a powerful, production-grade implementation of the **Saga pattern**. It is designed to create robust, stateful, and compensatable asynchronous processes that achieve eventual consistency. It offers a standardized framework for any long-running task, handling the complex orchestration, state management, and error recovery so that developers can focus on the business logic for each step.
+
+This module is extensive. For a complete architectural guide, component reference, and implementation details, please see the dedicated documentation:
+
+➡️ **[Architectural Guide: The AFFAsync Saga Pattern for Salesforce](./README_AFFAsync.md)**
+
+</details>
+
+</details>
+<hr/>
 <details>
     <summary><b>Installation</b></summary>
 
@@ -1200,8 +1334,29 @@ Commons Module:
    - AFFCommons.cls
    - AFFCommons.cls-meta.xml
 
-</details>
+Error Module:
+   - AFFError.cls
+   - AFFError.cls-meta.xml
 
+Limit Module:
+   - AFFLimit.cls
+   - AFFLimit.cls-meta.xml
+
+Async Module (Saga Pattern):
+   - AFFAsync.cls
+   - AFFAsyncEng.cls
+   - AFFAsyncConsts.cls
+   - AFFError
+   - AFFLimit
+   - AFFBase
+   - AFF_Job__c (Custom Object)
+   - AFF_Job_Step__c (Custom Object)
+   - AFF_Job_Step_Chunk__c (Custom Object)
+   - AFF_Job_Enqueue__e (Platform Event)
+   - AFF_Job_Enqueue_trigger (Apex Trigger)
+
+</details>
+<hr/>
 <details>
     <summary><b>Demo Implementation</b></summary>
 
@@ -1456,7 +1611,7 @@ changeUnit.setDmlType(AFFDml.T_INSERT)
 * Testability: Each component can be tested in isolation
 * Flexibility: Easy to add/remove features or modify behavior
 </details>    
-
+<hr/>
 <details>
     <summary><b>Testing</b></summary>
 
@@ -1465,6 +1620,10 @@ changeUnit.setDmlType(AFFDml.T_INSERT)
 The framework includes comprehensive test coverage:
 
 1. Unit Tests:
+   - AFFAsyncBatchAggregationTest
+   - AFFAsyncBatchProviderTest
+   - AFFAsyncEngTest
+   - AFFAsyncTest
    - AFFBaseTest
    - AFFTriggerTest
    - AFFIterTest
@@ -1473,6 +1632,8 @@ The framework includes comprehensive test coverage:
    - AFFDmlTest
    - AFFSObjFactoryTest
    - AFFCommonsTest
+   - AFFErrorTest
+   - AFFLimitTest
 
 2. Integration Tests:
    - AFF_DEMO_AccountTriggerHandlerTest
@@ -1483,7 +1644,7 @@ The framework includes comprehensive test coverage:
    - AFFTestHelper
 
 </details>
-
+<hr/>
 <details>
     <summary><b>Best Practices</b></summary>
 
@@ -1511,6 +1672,7 @@ The framework includes comprehensive test coverage:
    - Monitor CPU and memory usage
 
 </details>
+<hr/>
 
 ## Contributing
 
