@@ -502,7 +502,7 @@ This adaptive, self-throttling behavior ensures that the system can handle burst
 
 **CAUTION: Designing Governor-Safe Steps (The "Poison Pill"):** The `AFFAsync` orchestrator is limit-aware and manages transactions between jobs. However, it cannot protect against a single `Step` implementation that attempts to process too much data at once. A step that exceeds governor limits (e.g., by querying or updating thousands of records in one go) will act as a "poison pill." It triggers an uncatchable `LimitException`, causing the entire transaction to roll back. As a result, the job's status is not updated to 'Failed', and it becomes stuck in an infinite processing loop, blocking all subsequent jobs.
 
-**Your Responsibility:** As a step designer, you must ensure your logic is divisible and respects governor limits. Use the framework's built-in chunking mechanism by processing data in small batches and returning a `StepCompletionState` with `isChunkCompleted=false` to signal that the step requires further processing in a new transaction.
+**Your Responsibility:** As a step designer, you must ensure your logic is divisible and respects governor limits. Use the framework's built-in chunking mechanism by processing data in small batches and returning a `StepCompletionState` with `isChunkCompleted=false` to signal that the step requires further processing in a new transaction. Always plan for your Step (Chunk) to be executed within a synchronous transaction, considering the worst-case scenario. Do not rely on your Step running with asynchronous governor limits.
 
 ### 6.2. Compensation and Failure Modes
 
