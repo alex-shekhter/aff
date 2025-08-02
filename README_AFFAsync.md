@@ -500,6 +500,10 @@ The `DefaultLimitAwareBatchOrchestratorImpl` is designed for high-throughput env
 
 This adaptive, self-throttling behavior ensures that the system can handle bursts of hundreds or thousands of jobs without failing due to governor limits.
 
+**CAUTION: Designing Governor-Safe Steps (The "Poison Pill"):** The `AFFAsync` orchestrator is limit-aware and manages transactions between jobs. However, it cannot protect against a single `Step` implementation that attempts to process too much data at once. A step that exceeds governor limits (e.g., by querying or updating thousands of records in one go) will act as a "poison pill." It triggers an uncatchable `LimitException`, causing the entire transaction to roll back. As a result, the job's status is not updated to 'Failed', and it becomes stuck in an infinite processing loop, blocking all subsequent jobs.
+
+**Your Responsibility:** As a step designer, you must ensure your logic is divisible and respects governor limits. Use the framework's built-in chunking mechanism by processing data in small batches and returning a `StepCompletionState` with `isChunkCompleted=false` to signal that the step requires further processing in a new transaction.
+
 ### 6.2. Compensation and Failure Modes
 
 The framework, as demonstrated by `AFF_DEMO_AFFAsync_AccRelOwnerChanger`, robustly handles different kinds of errors.
