@@ -66,12 +66,15 @@ public abstract inherited sharing class AFFAsyncEng {
         return;
       }
 
+      System.debug('PLATFORM_EVENT_ENGINE.start: Publishing events for ' + jobs.size() + ' jobs.');
+      System.debug('PLATFORM_EVENT_ENGINE.start: Events to publish -> ' + JSON.serialize(eventsToPublish));
       System.debug(
         'ENGINE: Prepared ' + eventsToPublish.size() + ' events for publishing.'
       );
       List<Database.SaveResult> results = this.publisher.publish(
         eventsToPublish
       );
+      System.debug('PLATFORM_EVENT_ENGINE.start: Publish results -> ' + JSON.serialize(results));
       System.debug(
         'ENGINE: Publisher returned ' +
           (results == null ? 0 : results.size()) +
@@ -189,6 +192,7 @@ public abstract inherited sharing class AFFAsyncEng {
     }
 
     public void execute() {
+      System.debug('PLATFORM_EVENT_EXECUTOR.execute: Starting execution for received events.');
       System.debug(
         'PlatformEventExecutor.execute entered with jobsToProcess: ' +
         jobsToProcess
@@ -196,10 +200,12 @@ public abstract inherited sharing class AFFAsyncEng {
       if (jobsToProcess.isEmpty()) {
         return;
       }
+      System.debug('PLATFORM_EVENT_EXECUTOR.execute: Jobs to process -> ' + JSON.serialize(jobsToProcess));
       AFFAsync.StepExecutor executor = new AFFAsync.DefaultDynamicStepExecutorImpl();
-      AFFAsync.Retrier retrier = new AFFAsync.FixedAttemptsRetrierImpl(3);
+      AFFAsync.Retrier retrier = new AFFAsync.FixedAttemptsRetrierImpl(1);
       AFFAsync.Engine engine = new AFFAsyncEng.PlatformEventEngine();
       AFFAsync.Engine retryEngine = new AFFAsyncEng.PlatformEventEngine();
+      System.debug('PLATFORM_EVENT_EXECUTOR.execute: Invoking LimitAwareBatchOrchestrator.');
       AFFAsync.LimitAwareBatchOrchestrator orchestrator = new AFFAsync.DefaultLimitAwareBatchOrchestratorImpl(
         executor,
         retrier,

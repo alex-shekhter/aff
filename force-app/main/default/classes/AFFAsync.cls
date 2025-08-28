@@ -459,6 +459,7 @@ public abstract inherited sharing class AFFAsync {
     }
 
     public JobState createJob(JobState jobState) {
+      System.debug('PROVIDER.createJob: Creating job -> ' + JSON.serialize(jobState));
       if (jobState == null) {
         throw new IllegalArgumentException(AFFAsyncConsts.ERROR_JOB_STATE_NULL);
       }
@@ -481,6 +482,7 @@ public abstract inherited sharing class AFFAsync {
           jobState.steps[i].stepId = stepRecords[i].Id;
         }
       }
+      System.debug('PROVIDER.createJob: Job created successfully with ID: ' + jobState.jobId);
       return jobState;
     }
 
@@ -492,6 +494,7 @@ public abstract inherited sharing class AFFAsync {
 
     public JobState getJobState() {
       if (job == null) {
+        System.debug('PROVIDER.getJobState: Cache miss. Loading job and steps for job ID: ' + this.jobId);
         job = loadJobAndSteps();
       }
       return job;
@@ -515,7 +518,7 @@ public abstract inherited sharing class AFFAsync {
       if (step == null || chunkIndex == null || chunkIndex < 0) {
         return null;
       }
-
+      System.debug('PROVIDER.getChunkState: Querying for chunk with stepId=' + step.stepId + ' and chunkIndex=' + chunkIndex);
       List<AFF_Job_Step_Chunk__c> chunkRecords = [
         SELECT
           Id,
@@ -538,6 +541,7 @@ public abstract inherited sharing class AFFAsync {
     }
 
     public List<ChunkState> getAllChunkStatesForStep(Id stepId) {
+      System.debug('PROVIDER.getAllChunkStatesForStep: Querying all chunks for stepId: ' + stepId);
       if (stepId == null) {
         return new List<ChunkState>();
       }
@@ -561,6 +565,7 @@ public abstract inherited sharing class AFFAsync {
       ]) {
         chunks.add(affJobStepChunkToChunkState(chunkRecord));
       }
+      System.debug('PROVIDER.getAllChunkStatesForStep: Found ' + chunks.size() + ' chunks.');
       return chunks;
     }
 
@@ -617,14 +622,17 @@ public abstract inherited sharing class AFFAsync {
     }
 
     public void saveJob(JobState job) {
+      System.debug('PROVIDER.saveJob: Saving job state for job ID: ' + job.jobId + ' -> ' + JSON.serialize(job));
       update as System jobToAffJob(job);
     }
 
     public void saveStep(StepState step) {
+      System.debug('PROVIDER.saveStep: Saving step state for step ID: ' + step.stepId + ' -> ' + JSON.serialize(step));
       update as System stepStateToAffJobStep(step);
     }
 
     public void saveChunk(ChunkState chunk) {
+      System.debug('PROVIDER.saveChunk: Saving chunk state for chunk ID: ' + chunk.chunkId + ' -> ' + JSON.serialize(chunk));
       update as System chunkStateToAffJobStepChunk(chunk);
     }
 
@@ -632,6 +640,7 @@ public abstract inherited sharing class AFFAsync {
       if (chunks == null || chunks.isEmpty()) {
         return;
       }
+      System.debug('PROVIDER.insertChunks: Inserting ' + chunks.size() + ' new chunks.');
       List<AFF_Job_Step_Chunk__c> recordsToInsert = new List<AFF_Job_Step_Chunk__c>();
       for (ChunkState chunk : chunks) {
         AFF_Job_Step_Chunk__c newRecord = chunkStateToAffJobStepChunk(chunk);
@@ -925,6 +934,8 @@ public abstract inherited sharing class AFFAsync {
       JobState job,
       StepState step
     ) {
+      System.debug('EXECUTE_HANDLER.handle: Executing step ' + step.stepIndex + ' for job ' + job.jobId);
+      System.debug('EXECUTE_HANDLER.handle: Step status before execution: ' + step.status);
       if (step.status == AFFAsyncConsts.STATUS_PENDING) {
         step.status = AFFAsyncConsts.STATUS_IN_PROGRESS;
       }
@@ -932,11 +943,13 @@ public abstract inherited sharing class AFFAsync {
       StepCompletionState completion = (StepCompletionState) orchestrator.retrier.execute(
         new ExecutionAction(orchestrator.stepExecutor, orchestrator.context)
       );
+      System.debug('EXECUTE_HANDLER.handle: Step execution completed. Completion State -> ' + JSON.serialize(completion));
 
       ChunkState executionRecordChunk = this.createExecutionRecord(
         step,
         completion
       );
+      System.debug('EXECUTE_HANDLER.handle: Creating execution record chunk.');
       orchestrator.context.getProvider()
         .insertChunks(new List<ChunkState>{ executionRecordChunk });
 
@@ -969,11 +982,13 @@ public abstract inherited sharing class AFFAsync {
       StepState step,
       StepCompletionState completion
     ) {
+      System.debug('EXECUTE_HANDLER.handleChunkInProgress: Step has more chunks. Updating step state.');
       step.status = AFFAsyncConsts.STATUS_IN_PROGRESS;
       step.currentChunkIndex = (step.currentChunkIndex == null)
         ? 1
         : step.currentChunkIndex + 1;
       step.progressState = completion.nextStepProgressState;
+      System.debug('EXECUTE_HANDLER.handleChunkInProgress: New chunk index: ' + step.currentChunkIndex + ', New progress state: ' + step.progressState);
       // orchestrator.nextStepEngine.start(new List<JobState>{ job });
     }
 
@@ -984,6 +999,7 @@ public abstract inherited sharing class AFFAsync {
       StepState step,
       StepCompletionState completion
     ) {
+      System.debug('EXECUTE_HANDLER.handleStepCompletion: Step execution is fully complete.');
       step.status = AFFAsyncConsts.STATUS_COMPLETED;
       step.progressState = completion.nextStepProgressState;
 
@@ -1076,7 +1092,12 @@ public abstract inherited sharing class AFFAsync {
       JobState job,
       StepState step
     ) {
-      if (step.status == AFFAsyncConsts.STATUS_COMPLETED) {
+      System.debug('COMPENSATE_HANDLER.handle: Compensating step ' + step.stepIndex + ' for job ' + job.jobId);
+      System.debug('COMPENSATE_HANDLER.handle: Step status before compensation: ' + step.status);
+      if (
+        step.status == AFFAsyncConsts.STATUS_COMPLETED ||
+        step.status == AFFAsyncConsts.STATUS_IN_PROGRESS
+      ) {
         step.status = AFFAsyncConsts.STATUS_COMPENSATING;
         step.progressState = null;
         step.totalChunks = 0;
@@ -1086,6 +1107,7 @@ public abstract inherited sharing class AFFAsync {
       StepCompletionState completion = (StepCompletionState) orchestrator.retrier.execute(
         new CompensationAction(orchestrator.stepExecutor, orchestrator.context)
       );
+      System.debug('COMPENSATE_HANDLER.handle: Compensation logic executed. Completion State -> ' + JSON.serialize(completion));
 
       ChunkState compensationChunk = new ChunkState();
       compensationChunk.parentStepId = step.stepId;
@@ -1094,15 +1116,19 @@ public abstract inherited sharing class AFFAsync {
         : step.totalChunks;
       compensationChunk.result = completion.partialResult;
       compensationChunk.status = AFFAsyncConsts.STATUS_COMPENSATED;
+      System.debug('COMPENSATE_HANDLER.handle: Creating compensation record chunk.');
       orchestrator.context.getProvider()
         .insertChunks(new List<ChunkState>{ compensationChunk });
 
       step.totalChunks = (step.totalChunks == null) ? 1 : step.totalChunks + 1;
+      System.debug('COMPENSATE_HANDLER.handle: Total compensation chunks for this step: ' + step.totalChunks);
 
       if (completion.nextChunk != null) {
+        System.debug('COMPENSATE_HANDLER.handle: More compensation chunks to process.');
         step.progressState = completion.nextStepProgressState;
         // orchestrator.nextStepEngine.start(new List<JobState>{ job });
       } else {
+        System.debug('COMPENSATE_HANDLER.handle: Step compensation is fully complete. Regressing job.');
         step.status = AFFAsyncConsts.STATUS_COMPENSATED;
         orchestrator.regressJob(job);
       }
@@ -1115,6 +1141,7 @@ public abstract inherited sharing class AFFAsync {
       JobState job,
       StepState step
     ) {
+      System.debug('SKIP_COMPENSATION_HANDLER.handle: Skipping compensation for step ' + step.stepIndex + ' as its status is ' + step.status);
       step.status = AFFAsyncConsts.STATUS_COMPENSATED;
       orchestrator.regressJob(job);
     }
@@ -1166,6 +1193,7 @@ public abstract inherited sharing class AFFAsync {
       this.context.getProvider().invalidateCache();
       JobState job = this.context.getJobState();
       StepState step = null;
+      System.debug('ORCHESTRATOR.run: Starting orchestration for job: ' + ((job == null) ? 'null' : job.jobId));
 
       try {
         if (job.status == AFFAsyncConsts.STATUS_NEW) {
@@ -1173,21 +1201,28 @@ public abstract inherited sharing class AFFAsync {
         }
 
         if (this.isJobInTerminalState(job)) {
+           System.debug('ORCHESTRATOR.run: Job is in a terminal state (' + job.status + '). Aborting.');
           return;
         }
         step = this.context.getProvider().getStepState(job.currentStepIndex);
         if (step == null) {
+          System.debug(LoggingLevel.WARN, 'ORCHESTRATOR.run: No current step found for index ' + job.currentStepIndex + '. Aborting.');
           return;
         }
+        System.debug('ORCHESTRATOR.run: Current Job State -> ' + JSON.serialize(job));
+        System.debug('ORCHESTRATOR.run: Current Step -> ' + JSON.serialize(step));
 
         String stateKey = job.direction + '_' + step.status;
+        System.debug('ORCHESTRATOR.run: State Key -> ' + stateKey);
         StateHandler handler = this.transitions.get(stateKey);
 
         if (handler != null) {
+          System.debug('ORCHESTRATOR.run: Invoking handler for state key: ' + stateKey);
           handler.handle(this, job, step);
         } else {
           String error =
             AFFAsyncConsts.ERROR_UNKNOWN_STATE_TRANSITION + stateKey;
+          System.debug(LoggingLevel.ERROR, 'ORCHESTRATOR.run: ' + error);
           job.finalErrorDetails = error;
           job.status = AFFAsyncConsts.STATUS_FAILED;
           this.invokeFinalizer(job);
@@ -1244,11 +1279,14 @@ public abstract inherited sharing class AFFAsync {
 
     private void advanceJob(JobState job) {
       job.currentStepIndex++;
+      System.debug('ORCHESTRATOR.advanceJob: Advancing job ' + job.jobId + ' to step index ' + job.currentStepIndex);
       if (job.currentStepIndex >= job.totalSteps) {
         job.status = AFFAsyncConsts.STATUS_COMPLETED;
+        System.debug('ORCHESTRATOR.advanceJob: Job ' + job.jobId + ' has completed all steps.');
         this.invokeFinalizer(job);
       } else {
         if (isStandalone) {
+          System.debug('ORCHESTRATOR.advanceJob: Triggering next step engine for job ' + job.jobId);
           this.nextStepEngine.start(new List<JobState>{ job });
         }
       }
@@ -1256,13 +1294,16 @@ public abstract inherited sharing class AFFAsync {
 
     private void regressJob(JobState job) {
       job.currentStepIndex--;
+      System.debug('ORCHESTRATOR.regressJob: Regressing job ' + job.jobId + ' to step index ' + job.currentStepIndex);
       if (job.currentStepIndex < 0) {
         if (job.status != AFFAsyncConsts.STATUS_COMPENSATION_FAILED) {
           job.status = AFFAsyncConsts.STATUS_FAILED;
         }
+        System.debug('ORCHESTRATOR.regressJob: Job ' + job.jobId + ' has completed all compensations.');
         this.invokeFinalizer(job);
       } else {
         if (isStandalone) {
+          System.debug('ORCHESTRATOR.regressJob: Triggering next step engine for job ' + job.jobId);
           this.nextStepEngine.start(new List<JobState>{ job });
         }
       }
@@ -1273,6 +1314,8 @@ public abstract inherited sharing class AFFAsync {
       StepState step,
       Exception e
     ) {
+      System.debug('ORCHESTRATOR.handlePermanentFailure: A permanent failure occurred for job: ' + job.jobId);
+      System.debug('ORCHESTRATOR.handlePermanentFailure: Exception -> ' + e);
       AFFError.SerializableError error = AFFError.marshal(e);
       error.message = 'PERMANENT FAILURE: ' + error.message;
       job.finalErrorDetails = error.serialize();
@@ -1292,16 +1335,28 @@ public abstract inherited sharing class AFFAsync {
       StepState step,
       Exception e
     ) {
+      System.debug('ORCHESTRATOR.handleReversibleFailure: A reversible failure occurred for job: ' + job.jobId);
+      System.debug('ORCHESTRATOR.handleReversibleFailure: Exception -> ' + e);
+      System.debug('ORCHESTRATOR.handleReversibleFailure: Current job direction: ' + job.direction);
       AFFError.SerializableError error = AFFError.marshal(e);
       error.message = 'REVERSIBLE FAILURE: ' + error.message;
       job.finalErrorDetails = error.serialize();
       if (job.direction == AFFAsyncConsts.DIRECTION_DOWN) {
         if (step != null) {
-          step.status = AFFAsyncConsts.STATUS_FAILED;
+          // Only mark the step as Failed if it failed on the very first chunk.
+          // If it's already InProgress, it means at least one chunk succeeded,
+          // and it needs to be compensated.
+          if (step.status == AFFAsyncConsts.STATUS_PENDING) {
+            step.status = AFFAsyncConsts.STATUS_FAILED;
+          }
         }
         job.status = AFFAsyncConsts.STATUS_AWAITING_COMPENSATION;
         job.direction = AFFAsyncConsts.DIRECTION_UP;
-        this.nextStepEngine.start(new List<JobState>{ job });
+        if (isStandalone) {
+          System.debug('ORCHESTRATOR.handleReversibleFailure: Changing job direction to UP and status to AwaitingCompensation.');
+          System.debug('ORCHESTRATOR.handleReversibleFailure: Relaunching engine for compensation.');
+          this.nextStepEngine.start(new List<JobState>{ job });
+        }
       } else {
         if (step != null) {
           step.status = AFFAsyncConsts.STATUS_COMPENSATION_FAILED;
